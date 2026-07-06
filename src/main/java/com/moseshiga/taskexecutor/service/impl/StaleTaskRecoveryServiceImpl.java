@@ -28,12 +28,10 @@ public class StaleTaskRecoveryServiceImpl implements StaleTaskRecoveryService {
     @Override
     @Transactional
     public int recoverStaleTasks() {
-        Instant now = Instant.now();
-        Instant staleBefore = now.minusMillis(staleTimeoutMs);
+        Instant staleBefore = Instant.now().minusMillis(staleTimeoutMs);
 
         int recoveredCount = taskRepository.recoverStaleTasks(
                 staleBefore,
-                now,
                 maxAttempts,
                 RECOVERY_BATCH_SIZE
         );
