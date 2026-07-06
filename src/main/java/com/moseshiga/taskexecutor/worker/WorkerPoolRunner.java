@@ -8,6 +8,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 import java.util.concurrent.ExecutorService;
@@ -16,6 +17,11 @@ import java.util.concurrent.TimeUnit;
 @Slf4j
 @Component
 @RequiredArgsConstructor
+@ConditionalOnProperty(
+        name = "worker.enabled",
+        havingValue = "true",
+        matchIfMissing = true
+)
 public class WorkerPoolRunner implements ApplicationRunner {
     private final ExecutorService workerExecutorService;
     private final TaskWorkerService taskWorkerService;
