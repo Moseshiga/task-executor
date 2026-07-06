@@ -13,7 +13,9 @@ The service receives task messages from Kafka, stores them in PostgreSQL, proces
 * Query task status by id through REST API
 * Support multiple application instances sharing the same database
 * Prevent duplicate task execution using PostgreSQL `FOR UPDATE SKIP LOCKED`
-* Recover stale `IN_PROGRESS` tasks after application crashes
+* Guard task updates with an execution lease based on `taskId` and `attemptCount`
+* Recover stale `IN_PROGRESS` tasks using `updated_at` as a heartbeat timestamp
+* Retry Kafka processing failures and publish exhausted records to `tasks.DLT`
 * Validate incoming task data
 * Document REST API with Swagger/OpenAPI
 * Run PostgreSQL, Kafka, Kafka UI, and the application through Docker Compose
@@ -39,47 +41,76 @@ The service receives task messages from Kafka, stores them in PostgreSQL, proces
 
 ```text
 Kafka topic: tasks
-        ↓
+        |
+        v
 TaskKafkaConsumer
-        ↓
+        |
+        | valid message saved successfully
+        v
 TaskRegistrationService
-        ↓
+        |
+        v
 PostgreSQL: tasks table, status = NEW
-        ↓
+        |
+        v
 Worker pool
-        ↓
+        |
+        v
 TaskWorkerService
-        ↓
+        |
+        v
 SELECT ... FOR UPDATE SKIP LOCKED
-        ↓
-status = IN_PROGRESS
-        ↓
+        |
+        v
+status = IN_PROGRESS, attemptCount incremented
+        |
+        v
+TaskExecutionLease(taskId, attemptCount)
+        |
+        v
 TaskExecutionService
-        ↓
-progress updates
-        ↓
+        |
+        v
+conditional progress / complete / fail updates
+        |
+        v
 COMPLETED / FAILED
-        ↓
+        |
+        v
 REST API: GET /api/tasks/{id}
+
+Invalid Kafka messages or records that still fail after retry:
+
+tasks -> retry -> tasks.DLT
 ```
 
 ## Task Lifecycle
 
 ```text
 NEW
- ↓ worker picked task
+ |
+ | worker picked task
+ v
 IN_PROGRESS
- ↓ success
+ |
+ | success
+ v
 COMPLETED
 
 NEW
- ↓ worker picked task
+ |
+ | worker picked task
+ v
 IN_PROGRESS
- ↓ execution error
+ |
+ | execution error
+ v
 FAILED
 
 IN_PROGRESS
- ↓ stale timeout / app crash
+ |
+ | stale heartbeat timeout / app crash
+ v
 NEW or FAILED
 ```
 
@@ -98,24 +129,55 @@ LIMIT 1;
 
 This allows multiple application instances to safely work with the same database without processing the same task twice.
 
+When a worker claims a task, it increments `attemptCount` and receives a `TaskExecutionLease`.
+
 ## Stale Task Recovery
 
 If an application instance crashes after setting a task to `IN_PROGRESS`, the task could otherwise stay stuck forever.
 
-The recovery scheduler periodically finds stale `IN_PROGRESS` tasks.
+The recovery scheduler periodically finds stale `IN_PROGRESS` tasks. A task is considered stale when its `updated_at` timestamp is older than the configured timeout.
+
+`updated_at` is used as a heartbeat timestamp. Progress updates refresh it, so a long-running healthy task is not recovered only because its `started_at` value is old.
 
 If the task has not reached the maximum attempt count, it is returned to `NEW`.
 
 If the maximum attempt count is reached, it is marked as `FAILED`.
 
 ```text
-IN_PROGRESS too long
-    ↓
-attemptCount < maxAttempts → NEW
-attemptCount >= maxAttempts → FAILED
+IN_PROGRESS with old updated_at
+    |
+    | attemptCount < maxAttempts
+    v
+NEW
+
+IN_PROGRESS with old updated_at
+    |
+    | attemptCount >= maxAttempts
+    v
+FAILED
 ```
 
 Recovery also uses `FOR UPDATE SKIP LOCKED`, so multiple instances can run recovery safely.
+
+## Execution Lease
+
+When a worker picks a task, it receives an execution lease:
+
+```java
+TaskExecutionLease(taskId, attemptCount)
+```
+
+The `attemptCount` acts as a lightweight execution token.
+
+All progress, completion, failure, and retry-release updates are conditional on:
+
+```text
+id = taskId
+attempt_count = attemptCount
+status = IN_PROGRESS
+```
+
+This prevents an old worker from overwriting a newer retry attempt after stale recovery has returned a task to `NEW` and another worker has picked it again.
 
 ## Project Structure
 
@@ -190,8 +252,11 @@ spring.kafka.consumer.group-id=task-executor-group
 spring.kafka.consumer.auto-offset-reset=earliest
 spring.kafka.consumer.enable-auto-commit=false
 spring.kafka.listener.ack-mode=manual
+spring.kafka.producer.key-serializer=org.apache.kafka.common.serialization.StringSerializer
+spring.kafka.producer.value-serializer=org.springframework.kafka.support.serializer.JsonSerializer
 
 task.kafka.topic=tasks
+task.kafka.dlt-topic=tasks.DLT
 
 worker.enabled=true
 worker.pool-size=4
@@ -267,15 +332,40 @@ Use `down -v` only if you want to delete PostgreSQL data.
 | PostgreSQL  | localhost:5432                        |
 | Kafka       | localhost:9092                        |
 
-## Kafka Topic
+## Kafka Topics
 
-Default topic:
+Default input topic:
 
 ```text
 tasks
 ```
 
-The topic is created by the `kafka-init` service in Docker Compose.
+Dead-letter topic:
+
+```text
+tasks.DLT
+```
+
+Both topics are created by the `kafka-init` service in Docker Compose.
+
+## Kafka Error Handling
+
+The consumer uses manual acknowledgment.
+
+Valid messages are acknowledged only after the task is successfully saved to PostgreSQL.
+
+Invalid messages are published to `tasks.DLT` and then acknowledged, because retrying the same invalid payload would not make it valid.
+
+Infrastructure failures, such as temporary database or transaction errors, are not acknowledged immediately. The exception is rethrown to Spring Kafka, which retries processing with a fixed backoff.
+
+Current retry policy:
+
+```text
+3 retry attempts
+1 second fixed backoff between attempts
+```
+
+If all retry attempts are exhausted, the original Kafka record is published to `tasks.DLT`.
 
 ## Producing a Task Message
 
@@ -446,16 +536,43 @@ Task execution order is controlled by PostgreSQL workers, not by Kafka partition
 
 ## Delivery and Idempotency Notes
 
-The current consumer commits Kafka offset manually after processing:
+The consumer commits Kafka offset manually after successful processing:
 
 ```text
 message received
-    ↓
+    |
+    v
 validation
-    ↓
+    |
+    v
 task saved to DB
-    ↓
+    |
+    v
 acknowledge offset
+```
+
+Invalid messages are handled separately:
+
+```text
+invalid message
+    |
+    v
+publish to tasks.DLT
+    |
+    v
+acknowledge offset
+```
+
+Infrastructure failures are not acknowledged immediately:
+
+```text
+database / transaction error
+    |
+    v
+retry with fixed backoff
+    |
+    v
+publish to tasks.DLT if retries are exhausted
 ```
 
 If the application crashes after saving the task but before acknowledging the Kafka message, the same Kafka message may be consumed again after restart.
@@ -634,7 +751,6 @@ The current version intentionally does not include:
 Security
 Redis
 Admin panel
-DLQ
 Prometheus/Grafana
 CI/CD
 User accounts
@@ -651,8 +767,6 @@ Possible next steps:
 
 ```text
 Add idempotency with externalTaskId
-Add Dead Letter Queue for invalid Kafka messages
-Add retry policy for temporary database failures
 Add task cancellation endpoint
 Add task priority
 Add metrics for worker pool and task execution time
