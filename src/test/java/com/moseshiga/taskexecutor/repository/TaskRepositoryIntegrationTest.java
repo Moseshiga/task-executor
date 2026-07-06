@@ -170,7 +170,7 @@ class TaskRepositoryIntegrationTest extends PostgresIntegrationTest {
                 .createdAt(now)
                 .startedAt(startedAt)
                 .completedAt(status == TaskStatus.COMPLETED ? now : null)
-                .updatedAt(now)
+                .updatedAt(startedAt == null ? now : startedAt)
                 .build();
 
         return taskRepository.saveAndFlush(task);

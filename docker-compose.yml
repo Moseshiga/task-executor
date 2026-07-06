@@ -62,6 +62,13 @@ services:
       --topic tasks
       --partitions 3
       --replication-factor 1
+      &&
+      kafka-topics --bootstrap-server kafka:29092
+      --create
+      --if-not-exists
+      --topic tasks.DLT
+      --partitions 3
+      --replication-factor 1
       "
     networks:
       - task-network

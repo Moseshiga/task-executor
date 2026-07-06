@@ -29,12 +29,105 @@ public interface TaskRepository extends JpaRepository<TaskEntity, Long> {
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query(
             value = """
+                    UPDATE tasks
+                    SET progress = :progress,
+                        result = :result,
+                        updated_at = :updatedAt,
+                        version = version + 1
+                    WHERE id = :taskId
+                      AND attempt_count = :attemptCount
+                      AND status = 'IN_PROGRESS'
+                    """,
+            nativeQuery = true
+    )
+    int updateProgressIfCurrent(
+            @Param("taskId") Long taskId,
+            @Param("attemptCount") int attemptCount,
+            @Param("progress") int progress,
+            @Param("result") String result,
+            @Param("updatedAt") Instant updatedAt
+    );
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query(
+            value = """
+                    UPDATE tasks
+                    SET status = 'COMPLETED',
+                        progress = 100,
+                        result = :result,
+                        error_message = NULL,
+                        completed_at = :completedAt,
+                        updated_at = :completedAt,
+                        version = version + 1
+                    WHERE id = :taskId
+                      AND attempt_count = :attemptCount
+                      AND status = 'IN_PROGRESS'
+                    """,
+            nativeQuery = true
+    )
+    int completeIfCurrent(
+            @Param("taskId") Long taskId,
+            @Param("attemptCount") int attemptCount,
+            @Param("result") String result,
+            @Param("completedAt") Instant completedAt
+    );
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query(
+            value = """
+                    UPDATE tasks
+                    SET status = 'FAILED',
+                        error_message = :errorMessage,
+                        completed_at = :completedAt,
+                        updated_at = :completedAt,
+                        version = version + 1
+                    WHERE id = :taskId
+                      AND attempt_count = :attemptCount
+                      AND status = 'IN_PROGRESS'
+                    """,
+            nativeQuery = true
+    )
+    int failIfCurrent(
+            @Param("taskId") Long taskId,
+            @Param("attemptCount") int attemptCount,
+            @Param("errorMessage") String errorMessage,
+            @Param("completedAt") Instant completedAt
+    );
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query(
+            value = """
+                    UPDATE tasks
+                    SET status = 'NEW',
+                        progress = 0,
+                        result = :result,
+                        error_message = NULL,
+                        started_at = NULL,
+                        completed_at = NULL,
+                        updated_at = :updatedAt,
+                        version = version + 1
+                    WHERE id = :taskId
+                      AND attempt_count = :attemptCount
+                      AND status = 'IN_PROGRESS'
+                    """,
+            nativeQuery = true
+    )
+    int returnToNewIfCurrent(
+            @Param("taskId") Long taskId,
+            @Param("attemptCount") int attemptCount,
+            @Param("result") String result,
+            @Param("updatedAt") Instant updatedAt
+    );
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query(
+            value = """
                 WITH locked_tasks AS (
                     SELECT id
                     FROM tasks
                     WHERE status = 'IN_PROGRESS'
-                      AND started_at < :staleBefore
-                    ORDER BY started_at, id
+                      AND updated_at < :staleBefore
+                    ORDER BY updated_at, id
                     FOR UPDATE SKIP LOCKED
                     LIMIT :batchSize
                 )

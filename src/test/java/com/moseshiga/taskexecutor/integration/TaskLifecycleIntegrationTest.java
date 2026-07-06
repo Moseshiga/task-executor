@@ -4,6 +4,7 @@ import com.moseshiga.taskexecutor.dto.TaskRequestDto;
 import com.moseshiga.taskexecutor.entity.TaskEntity;
 import com.moseshiga.taskexecutor.enums.TaskStatus;
 import com.moseshiga.taskexecutor.repository.TaskRepository;
+import com.moseshiga.taskexecutor.service.TaskExecutionLease;
 import com.moseshiga.taskexecutor.service.TaskExecutionService;
 import com.moseshiga.taskexecutor.service.TaskRegistrationService;
 import com.moseshiga.taskexecutor.service.TaskWorkerService;
@@ -52,9 +53,9 @@ class TaskLifecycleIntegrationTest extends PostgresIntegrationTest {
         assertThat(newTask.getStartedAt()).isNull();
         assertThat(newTask.getCompletedAt()).isNull();
 
-        Optional<Long> pickedTaskId = taskWorkerService.pickNextTask();
+        Optional<TaskExecutionLease> pickedTask = taskWorkerService.pickNextTask();
 
-        assertThat(pickedTaskId).contains(registeredTask.getId());
+        assertThat(pickedTask).hasValueSatisfying(lease -> assertThat(lease.taskId()).isEqualTo(registeredTask.getId()));
 
         TaskEntity inProgressTask = taskRepository.findById(registeredTask.getId()).orElseThrow();
 
@@ -63,7 +64,7 @@ class TaskLifecycleIntegrationTest extends PostgresIntegrationTest {
         assertThat(inProgressTask.getStartedAt()).isNotNull();
         assertThat(inProgressTask.getResult()).isEqualTo("Task execution started");
 
-        taskExecutionService.execute(registeredTask.getId());
+        taskExecutionService.execute(pickedTask.orElseThrow());
 
         TaskEntity completedTask = taskRepository.findById(registeredTask.getId()).orElseThrow();
 

@@ -53,7 +53,7 @@ public class WorkerPoolRunner implements ApplicationRunner {
     public void shutdown() {
         log.info("Stopping task worker pool");
 
-        workerExecutorService.shutdownNow();
+        workerExecutorService.shutdown();
 
         try {
             if (!workerExecutorService.awaitTermination(30, TimeUnit.SECONDS)) {

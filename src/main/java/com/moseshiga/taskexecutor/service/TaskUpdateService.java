@@ -1,9 +1,11 @@
 package com.moseshiga.taskexecutor.service;
 
 public interface TaskUpdateService {
-    void updateProgress(Long taskId, int progress, String result);
+    boolean updateProgress(Long taskId, int attemptCount, int progress, String result);
 
-    void complete(Long taskId, String result);
+    boolean complete(Long taskId, int attemptCount, String result);
 
-    void fail(Long taskId, String errorMessage);
+    boolean fail(Long taskId, int attemptCount, String errorMessage);
+
+    boolean returnToNew(Long taskId, int attemptCount, String result);
 }

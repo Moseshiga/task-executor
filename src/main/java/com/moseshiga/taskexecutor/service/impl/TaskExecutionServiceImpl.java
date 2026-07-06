@@ -1,8 +1,10 @@
 package com.moseshiga.taskexecutor.service.impl;
 
 import com.moseshiga.taskexecutor.entity.TaskEntity;
+import com.moseshiga.taskexecutor.enums.TaskStatus;
 import com.moseshiga.taskexecutor.exception.TaskNotFoundException;
 import com.moseshiga.taskexecutor.repository.TaskRepository;
+import com.moseshiga.taskexecutor.service.TaskExecutionLease;
 import com.moseshiga.taskexecutor.service.TaskExecutionService;
 import com.moseshiga.taskexecutor.service.TaskUpdateService;
 import lombok.RequiredArgsConstructor;
@@ -19,33 +21,57 @@ public class TaskExecutionServiceImpl implements TaskExecutionService {
     private final TaskUpdateService taskUpdateService;
 
     @Override
-    public void execute(Long taskId) {
+    public void execute(TaskExecutionLease lease) {
+        Long taskId = lease.taskId();
+        int attemptCount = lease.attemptCount();
+
         try {
             TaskEntity task = findTask(taskId);
 
-            log.info("Task execution started: id={}, durationMs={}", taskId, task.getDurationMs());
+            if (!isCurrentLease(task, attemptCount)) {
+                log.warn(
+                        "Skipping stale task execution lease: id={}, expectedAttempt={}, actualAttempt={}, status={}",
+                        taskId,
+                        attemptCount,
+                        task.getAttemptCount(),
+                        task.getStatus()
+                );
+                return;
+            }
 
-            executeWithProgress(task);
+            log.info("Task execution started: id={}, attemptCount={}, durationMs={}", taskId, attemptCount, task.getDurationMs());
 
-            taskUpdateService.complete(
-                    taskId,
-                    "Task completed successfully"
-            );
+            boolean leaseStillCurrent = executeWithProgress(task, attemptCount);
+
+            if (leaseStillCurrent) {
+                taskUpdateService.complete(
+                        taskId,
+                        attemptCount,
+                        "Task completed successfully"
+                );
+            }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-
-            taskUpdateService.fail(
+            taskUpdateService.returnToNew(
                     taskId,
-                    "Task execution was interrupted"
+                    attemptCount,
+                    "Task returned to NEW because execution was interrupted"
             );
         } catch (Exception e) {
-            log.error("Task execution failed: id={}", taskId, e);
+            log.error("Task execution failed: id={}, attemptCount={}", taskId, attemptCount, e);
 
             taskUpdateService.fail(
                     taskId,
+                    attemptCount,
                     "Task execution failed: " + e.getMessage()
             );
         }
+    }
+
+    private boolean isCurrentLease(TaskEntity task, int attemptCount) {
+        return task.getStatus() == TaskStatus.IN_PROGRESS
+                && task.getAttemptCount() != null
+                && task.getAttemptCount() == attemptCount;
     }
 
     private TaskEntity findTask(Long taskId) {
@@ -53,7 +79,7 @@ public class TaskExecutionServiceImpl implements TaskExecutionService {
                 .orElseThrow(() -> new TaskNotFoundException(taskId));
     }
 
-    private void executeWithProgress(TaskEntity task) throws InterruptedException {
+    private boolean executeWithProgress(TaskEntity task, int attemptCount) throws InterruptedException {
         long durationMs = task.getDurationMs();
         long stepDurationMs = Math.max(durationMs / PROGRESS_STEPS, 1);
 
@@ -62,11 +88,19 @@ public class TaskExecutionServiceImpl implements TaskExecutionService {
 
             int progress = step * 100 / PROGRESS_STEPS;
 
-            taskUpdateService.updateProgress(
+            boolean updated = taskUpdateService.updateProgress(
                     task.getId(),
+                    attemptCount,
                     progress,
                     "Task execution progress: " + progress + "%"
             );
+
+            if (!updated) {
+                log.warn("Stopping execution because task lease is no longer current: id={}, attemptCount={}", task.getId(), attemptCount);
+                return false;
+            }
         }
+
+        return true;
     }
 }

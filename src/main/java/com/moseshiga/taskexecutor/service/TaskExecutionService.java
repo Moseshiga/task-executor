@@ -1,6 +1,5 @@
 package com.moseshiga.taskexecutor.service;
 
 public interface TaskExecutionService {
-
-    void execute(Long taskId);
+    void execute(TaskExecutionLease lease);
 }

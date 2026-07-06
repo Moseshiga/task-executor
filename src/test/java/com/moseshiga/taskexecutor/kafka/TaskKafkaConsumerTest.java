@@ -6,8 +6,10 @@ import jakarta.validation.Validation;
 import jakarta.validation.Validator;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.support.Acknowledgment;
 
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -17,19 +19,23 @@ class TaskKafkaConsumerTest {
 
     private TaskRegistrationService taskRegistrationService;
     private Acknowledgment acknowledgment;
+    private KafkaTemplate<String, TaskRequestDto> kafkaTemplate;
     private TaskKafkaConsumer taskKafkaConsumer;
 
     @BeforeEach
     void setUp() {
         taskRegistrationService = mock(TaskRegistrationService.class);
         acknowledgment = mock(Acknowledgment.class);
+        kafkaTemplate = mock(KafkaTemplate.class);
 
         Validator validator = Validation.buildDefaultValidatorFactory()
                 .getValidator();
 
         taskKafkaConsumer = new TaskKafkaConsumer(
                 taskRegistrationService,
-                validator
+                validator,
+                kafkaTemplate,
+                "tasks.DLT"
         );
     }
 
@@ -44,46 +50,51 @@ class TaskKafkaConsumerTest {
     }
 
     @Test
-    void consumeShouldAcknowledgeAndNotRegisterTaskWhenNameIsBlank() {
+    void consumeShouldAcknowledgeAndSendToDltWhenNameIsBlank() {
         TaskRequestDto requestDto = new TaskRequestDto(" ", 5000L);
 
         taskKafkaConsumer.consume(requestDto, acknowledgment);
 
         verify(taskRegistrationService, never()).register(requestDto);
+        verify(kafkaTemplate).send("tasks.DLT", requestDto);
         verify(acknowledgment).acknowledge();
     }
 
     @Test
-    void consumeShouldAcknowledgeAndNotRegisterTaskWhenDurationIsNull() {
+    void consumeShouldAcknowledgeAndSendToDltWhenDurationIsNull() {
         TaskRequestDto requestDto = new TaskRequestDto("Invalid task", null);
 
         taskKafkaConsumer.consume(requestDto, acknowledgment);
 
         verify(taskRegistrationService, never()).register(requestDto);
+        verify(kafkaTemplate).send("tasks.DLT", requestDto);
         verify(acknowledgment).acknowledge();
     }
 
     @Test
-    void consumeShouldAcknowledgeAndNotRegisterTaskWhenDurationIsNegative() {
+    void consumeShouldAcknowledgeAndSendToDltWhenDurationIsNegative() {
         TaskRequestDto requestDto = new TaskRequestDto("Invalid task", -100L);
 
         taskKafkaConsumer.consume(requestDto, acknowledgment);
 
         verify(taskRegistrationService, never()).register(requestDto);
+        verify(kafkaTemplate).send("tasks.DLT", requestDto);
         verify(acknowledgment).acknowledge();
     }
 
     @Test
-    void consumeShouldAcknowledgeWhenRegistrationFails() {
+    void consumeShouldRethrowAndNotAcknowledgeWhenRegistrationFails() {
         TaskRequestDto requestDto = new TaskRequestDto("Valid task", 5000L);
 
-        doThrow(new RuntimeException("Database error"))
+        RuntimeException databaseException = new RuntimeException("Database error");
+        doThrow(databaseException)
                 .when(taskRegistrationService)
                 .register(requestDto);
 
-        taskKafkaConsumer.consume(requestDto, acknowledgment);
+        assertThatThrownBy(() -> taskKafkaConsumer.consume(requestDto, acknowledgment))
+                .isSameAs(databaseException);
 
         verify(taskRegistrationService).register(requestDto);
-        verify(acknowledgment).acknowledge();
+        verify(acknowledgment, never()).acknowledge();
     }
 }

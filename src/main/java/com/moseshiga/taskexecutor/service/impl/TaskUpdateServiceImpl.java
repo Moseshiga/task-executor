@@ -1,7 +1,5 @@
 package com.moseshiga.taskexecutor.service.impl;
 
-import com.moseshiga.taskexecutor.entity.TaskEntity;
-import com.moseshiga.taskexecutor.enums.TaskStatus;
 import com.moseshiga.taskexecutor.exception.TaskNotFoundException;
 import com.moseshiga.taskexecutor.repository.TaskRepository;
 import com.moseshiga.taskexecutor.service.TaskUpdateService;
@@ -21,56 +19,85 @@ public class TaskUpdateServiceImpl implements TaskUpdateService {
 
     @Override
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void updateProgress(Long taskId, int progress, String result) {
-        TaskEntity task = findTask(taskId);
+    public boolean updateProgress(Long taskId, int attemptCount, int progress, String result) {
+        int updatedRows = taskRepository.updateProgressIfCurrent(
+                taskId,
+                attemptCount,
+                progress,
+                result,
+                Instant.now()
+        );
 
-        task.setProgress(progress);
-        task.setResult(result);
-        task.setUpdatedAt(Instant.now());
-
-        taskRepository.save(task);
-
-        log.debug("Task progress updated: id={}, progress={}", taskId, progress);
+        return handleConditionalUpdateResult(taskId, attemptCount, updatedRows, "progress update");
     }
 
     @Override
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void complete(Long taskId, String result) {
+    public boolean complete(Long taskId, int attemptCount, String result) {
         Instant now = Instant.now();
 
-        TaskEntity task = findTask(taskId);
+        int updatedRows = taskRepository.completeIfCurrent(
+                taskId,
+                attemptCount,
+                result,
+                now
+        );
 
-        task.setStatus(TaskStatus.COMPLETED);
-        task.setProgress(100);
-        task.setResult(result);
-        task.setErrorMessage(null);
-        task.setCompletedAt(now);
-        task.setUpdatedAt(now);
-
-        taskRepository.save(task);
-
-        log.info("Task completed: id={}", taskId);
+        boolean updated = handleConditionalUpdateResult(taskId, attemptCount, updatedRows, "completion");
+        if (updated) {
+            log.info("Task completed: id={}, attemptCount={}", taskId, attemptCount);
+        }
+        return updated;
     }
 
     @Override
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void fail(Long taskId, String errorMessage) {
+    public boolean fail(Long taskId, int attemptCount, String errorMessage) {
         Instant now = Instant.now();
 
-        TaskEntity task = findTask(taskId);
+        int updatedRows = taskRepository.failIfCurrent(
+                taskId,
+                attemptCount,
+                errorMessage,
+                now
+        );
 
-        task.setStatus(TaskStatus.FAILED);
-        task.setErrorMessage(errorMessage);
-        task.setCompletedAt(now);
-        task.setUpdatedAt(now);
-
-        taskRepository.save(task);
-
-        log.warn("Task failed: id={}, error={}", taskId, errorMessage);
+        boolean updated = handleConditionalUpdateResult(taskId, attemptCount, updatedRows, "failure");
+        if (updated) {
+            log.warn("Task failed: id={}, attemptCount={}, error={}", taskId, attemptCount, errorMessage);
+        }
+        return updated;
     }
 
-    private TaskEntity findTask(Long taskId) {
-        return taskRepository.findById(taskId)
-                .orElseThrow(() -> new TaskNotFoundException(taskId));
+    @Override
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public boolean returnToNew(Long taskId, int attemptCount, String result) {
+
+        int updatedRows = taskRepository.returnToNewIfCurrent(
+                taskId,
+                attemptCount,
+                result,
+                Instant.now()
+        );
+
+        boolean updated = handleConditionalUpdateResult(taskId, attemptCount, updatedRows, "return to NEW");
+        if (updated) {
+            log.info("Task returned to NEW: id={}, attemptCount={}", taskId, attemptCount);
+        }
+        return updated;
+    }
+
+    private boolean handleConditionalUpdateResult(Long taskId, int attemptCount, int updatedRows, String operation) {
+        if (updatedRows == 1) {
+            log.debug("Task {} accepted: id={}, attemptCount={}", operation, taskId, attemptCount);
+            return true;
+        }
+
+        if (!taskRepository.existsById(taskId)) {
+            throw new TaskNotFoundException(taskId);
+        }
+
+        log.warn("Task {} skipped because lease is stale: id={}, attemptCount={}", operation, taskId, attemptCount);
+        return false;
     }
 }

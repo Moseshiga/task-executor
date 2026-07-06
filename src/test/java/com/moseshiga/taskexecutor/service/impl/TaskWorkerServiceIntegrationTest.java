@@ -3,6 +3,7 @@ package com.moseshiga.taskexecutor.service.impl;
 import com.moseshiga.taskexecutor.entity.TaskEntity;
 import com.moseshiga.taskexecutor.enums.TaskStatus;
 import com.moseshiga.taskexecutor.repository.TaskRepository;
+import com.moseshiga.taskexecutor.service.TaskExecutionLease;
 import com.moseshiga.taskexecutor.service.TaskWorkerService;
 import com.moseshiga.taskexecutor.support.PostgresIntegrationTest;
 import org.junit.jupiter.api.BeforeEach;
@@ -41,9 +42,10 @@ class TaskWorkerServiceIntegrationTest extends PostgresIntegrationTest {
         TaskEntity firstTask = saveTask("First task", TaskStatus.NEW);
         TaskEntity secondTask = saveTask("Second task", TaskStatus.NEW);
 
-        Optional<Long> pickedTaskId = taskWorkerService.pickNextTask();
+        Optional<TaskExecutionLease> pickedLease = taskWorkerService.pickNextTask();
 
-        assertThat(pickedTaskId).contains(firstTask.getId());
+        assertThat(pickedLease).hasValueSatisfying(lease -> assertThat(lease.taskId()).isEqualTo(firstTask.getId()));
+        assertThat(pickedLease).hasValueSatisfying(lease -> assertThat(lease.attemptCount()).isEqualTo(1));
 
         TaskEntity pickedTask = taskRepository.findById(firstTask.getId()).orElseThrow();
         TaskEntity untouchedTask = taskRepository.findById(secondTask.getId()).orElseThrow();
@@ -66,7 +68,7 @@ class TaskWorkerServiceIntegrationTest extends PostgresIntegrationTest {
         saveTask("Completed task", TaskStatus.COMPLETED);
         saveTask("Failed task", TaskStatus.FAILED);
 
-        Optional<Long> pickedTaskId = taskWorkerService.pickNextTask();
+        Optional<TaskExecutionLease> pickedTaskId = taskWorkerService.pickNextTask();
 
         assertThat(pickedTaskId).isEmpty();
     }
@@ -75,7 +77,7 @@ class TaskWorkerServiceIntegrationTest extends PostgresIntegrationTest {
     void pickNextTaskShouldNotPickAlreadyInProgressTask() {
         TaskEntity inProgressTask = saveTask("In progress task", TaskStatus.IN_PROGRESS);
 
-        Optional<Long> pickedTaskId = taskWorkerService.pickNextTask();
+        Optional<TaskExecutionLease> pickedTaskId = taskWorkerService.pickNextTask();
 
         assertThat(pickedTaskId).isEmpty();
 
@@ -89,9 +91,10 @@ class TaskWorkerServiceIntegrationTest extends PostgresIntegrationTest {
     void pickNextTaskShouldIncrementAttemptCountFromPreviousValue() {
         TaskEntity task = saveTask("Retry task", TaskStatus.NEW, 2);
 
-        Optional<Long> pickedTaskId = taskWorkerService.pickNextTask();
+        Optional<TaskExecutionLease> pickedLease = taskWorkerService.pickNextTask();
 
-        assertThat(pickedTaskId).contains(task.getId());
+        assertThat(pickedLease).hasValueSatisfying(lease -> assertThat(lease.taskId()).isEqualTo(task.getId()));
+        assertThat(pickedLease).hasValueSatisfying(lease -> assertThat(lease.attemptCount()).isEqualTo(3));
 
         TaskEntity pickedTask = taskRepository.findById(task.getId()).orElseThrow();
 
@@ -113,11 +116,11 @@ class TaskWorkerServiceIntegrationTest extends PostgresIntegrationTest {
             TransactionTemplate requiresNewTransaction = new TransactionTemplate(transactionManager);
             requiresNewTransaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
 
-            Optional<Long> pickedTaskId = requiresNewTransaction.execute(innerStatus ->
+            Optional<TaskExecutionLease> pickedTask = requiresNewTransaction.execute(innerStatus ->
                     taskWorkerService.pickNextTask()
             );
 
-            assertThat(pickedTaskId).contains(secondTask.getId());
+            assertThat(pickedTask).hasValueSatisfying(lease -> assertThat(lease.taskId()).isEqualTo(secondTask.getId()));
         });
     }
 
