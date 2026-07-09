@@ -9,13 +9,14 @@ The service receives task messages from Kafka, stores them in PostgreSQL, proces
 * Register tasks from Kafka messages
 * Store tasks in PostgreSQL
 * Execute tasks asynchronously using worker threads
-* Persist intermediate progress and final result
+* Persist intermediate progress, status messages, and final result
 * Query task status by id through REST API
 * Support multiple application instances sharing the same database
 * Prevent duplicate task execution using PostgreSQL `FOR UPDATE SKIP LOCKED`
 * Guard task updates with an execution lease based on `taskId` and `attemptCount`
 * Recover stale `IN_PROGRESS` tasks using `updated_at` as a heartbeat timestamp
 * Retry Kafka processing failures and publish exhausted records to `tasks.DLT`
+* Manage JPA entity timestamps with Spring Data Auditing
 * Validate incoming task data
 * Document REST API with Swagger/OpenAPI
 * Run PostgreSQL, Kafka, Kafka UI, and the application through Docker Compose
@@ -159,6 +160,8 @@ FAILED
 
 Recovery also uses `FOR UPDATE SKIP LOCKED`, so multiple instances can run recovery safely.
 
+`created_at` and JPA-managed `updated_at` values are populated by Spring Data Auditing. Native conditional updates still set `updated_at` explicitly because this timestamp is part of the worker heartbeat and stale recovery algorithm.
+
 ## Execution Lease
 
 When a worker picks a task, it receives an execution lease:
@@ -256,7 +259,6 @@ spring.kafka.producer.key-serializer=org.apache.kafka.common.serialization.Strin
 spring.kafka.producer.value-serializer=org.springframework.kafka.support.serializer.JsonSerializer
 
 task.kafka.topic=tasks
-task.kafka.dlt-topic=tasks.DLT
 
 worker.enabled=true
 worker.pool-size=4
@@ -280,10 +282,12 @@ Migration location:
 src/main/resources/db/migration
 ```
 
-Main migration:
+Migrations:
 
 ```text
 V1__create_tasks_table.sql
+V2__add_status_message_to_tasks.sql
+V3__drop_task_version.sql
 ```
 
 Hibernate is configured with:
@@ -354,9 +358,19 @@ The consumer uses manual acknowledgment.
 
 Valid messages are acknowledged only after the task is successfully saved to PostgreSQL.
 
-Invalid messages are published to `tasks.DLT` and then acknowledged, because retrying the same invalid payload would not make it valid.
+Invalid messages and infrastructure failures are rethrown to Spring Kafka. `DefaultErrorHandler` applies the configured retry policy and delegates exhausted records to `DeadLetterPublishingRecoverer`.
 
-Infrastructure failures, such as temporary database or transaction errors, are not acknowledged immediately. The exception is rethrown to Spring Kafka, which retries processing with a fixed backoff.
+The dead-letter topic is derived from the original topic name:
+
+```text
+<source-topic>.DLT
+```
+
+For the default input topic, failed records are published to:
+
+```text
+tasks.DLT
+```
 
 Current retry policy:
 
@@ -365,7 +379,7 @@ Current retry policy:
 1 second fixed backoff between attempts
 ```
 
-If all retry attempts are exhausted, the original Kafka record is published to `tasks.DLT`.
+If all retry attempts are exhausted, the original Kafka record is published to `tasks.DLT`. The consumer does not publish to DLT manually.
 
 ## Producing a Task Message
 
@@ -441,6 +455,7 @@ Example response:
   "durationMs": 10000,
   "status": "COMPLETED",
   "progress": 100,
+  "statusMessage": "Task completed successfully",
   "result": "Task completed successfully",
   "errorMessage": null,
   "attemptCount": 1,
@@ -557,10 +572,10 @@ Invalid messages are handled separately:
 invalid message
     |
     v
-publish to tasks.DLT
+retry with fixed backoff
     |
     v
-acknowledge offset
+publish to tasks.DLT if retries are exhausted
 ```
 
 Infrastructure failures are not acknowledged immediately:
