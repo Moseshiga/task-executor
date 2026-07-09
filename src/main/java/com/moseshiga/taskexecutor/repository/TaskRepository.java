@@ -31,7 +31,7 @@ public interface TaskRepository extends JpaRepository<TaskEntity, Long> {
             value = """
                     UPDATE tasks
                     SET progress = :progress,
-                        result = :result,
+                        status_message = :statusMessage,
                         updated_at = :updatedAt,
                         version = version + 1
                     WHERE id = :taskId
@@ -44,7 +44,7 @@ public interface TaskRepository extends JpaRepository<TaskEntity, Long> {
             @Param("taskId") Long taskId,
             @Param("attemptCount") int attemptCount,
             @Param("progress") int progress,
-            @Param("result") String result,
+            @Param("statusMessage") String statusMessage,
             @Param("updatedAt") Instant updatedAt
     );
 
@@ -54,6 +54,7 @@ public interface TaskRepository extends JpaRepository<TaskEntity, Long> {
                     UPDATE tasks
                     SET status = 'COMPLETED',
                         progress = 100,
+                        status_message = 'Task completed successfully',
                         result = :result,
                         error_message = NULL,
                         completed_at = :completedAt,
@@ -77,6 +78,7 @@ public interface TaskRepository extends JpaRepository<TaskEntity, Long> {
             value = """
                     UPDATE tasks
                     SET status = 'FAILED',
+                        status_message = :errorMessage,
                         error_message = :errorMessage,
                         completed_at = :completedAt,
                         updated_at = :completedAt,
@@ -100,7 +102,8 @@ public interface TaskRepository extends JpaRepository<TaskEntity, Long> {
                     UPDATE tasks
                     SET status = 'NEW',
                         progress = 0,
-                        result = :result,
+                        status_message = :statusMessage,
+                        result = NULL,
                         error_message = NULL,
                         started_at = NULL,
                         completed_at = NULL,
@@ -115,7 +118,7 @@ public interface TaskRepository extends JpaRepository<TaskEntity, Long> {
     int returnToNewIfCurrent(
             @Param("taskId") Long taskId,
             @Param("attemptCount") int attemptCount,
-            @Param("result") String result,
+            @Param("statusMessage") String statusMessage,
             @Param("updatedAt") Instant updatedAt
     );
 
@@ -140,9 +143,13 @@ public interface TaskRepository extends JpaRepository<TaskEntity, Long> {
                         WHEN t.attempt_count >= :maxAttempts THEN t.progress
                         ELSE 0
                     END,
-                    result = CASE
+                    status_message = CASE
                         WHEN t.attempt_count >= :maxAttempts THEN 'Task failed by stale task recovery'
                         ELSE 'Task returned to NEW after stale IN_PROGRESS timeout'
+                    END,
+                    result = CASE
+                        WHEN t.attempt_count >= :maxAttempts THEN t.result
+                        ELSE NULL
                     END,
                     error_message = CASE
                         WHEN t.attempt_count >= :maxAttempts THEN 'Task failed after reaching max attempts'

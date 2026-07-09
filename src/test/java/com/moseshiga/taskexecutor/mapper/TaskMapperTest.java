@@ -25,6 +25,7 @@ class TaskMapperTest {
         assertThat(entity.getDurationMs()).isEqualTo(5000L);
         assertThat(entity.getStatus()).isEqualTo(TaskStatus.NEW);
         assertThat(entity.getProgress()).isZero();
+        assertThat(entity.getStatusMessage()).isEqualTo("Task registered");
         assertThat(entity.getResult()).isNull();
         assertThat(entity.getErrorMessage()).isNull();
         assertThat(entity.getAttemptCount()).isZero();
@@ -42,6 +43,7 @@ class TaskMapperTest {
                 .durationMs(5000L)
                 .status(TaskStatus.COMPLETED)
                 .progress(100)
+                .statusMessage("Task completed successfully")
                 .result("Task completed successfully")
                 .errorMessage(null)
                 .attemptCount(1)
@@ -59,6 +61,7 @@ class TaskMapperTest {
         assertThat(responseDto.durationMs()).isEqualTo(5000L);
         assertThat(responseDto.status()).isEqualTo(TaskStatus.COMPLETED);
         assertThat(responseDto.progress()).isEqualTo(100);
+        assertThat(responseDto.statusMessage()).isEqualTo("Task completed successfully");
         assertThat(responseDto.result()).isEqualTo("Task completed successfully");
         assertThat(responseDto.errorMessage()).isNull();
         assertThat(responseDto.attemptCount()).isEqualTo(1);

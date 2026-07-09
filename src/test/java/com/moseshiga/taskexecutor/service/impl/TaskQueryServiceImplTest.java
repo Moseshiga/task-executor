@@ -38,6 +38,7 @@ class TaskQueryServiceImplTest {
                 .durationMs(5000L)
                 .status(TaskStatus.COMPLETED)
                 .progress(100)
+                .statusMessage("Task completed successfully")
                 .result("Task completed successfully")
                 .errorMessage(null)
                 .attemptCount(1)
@@ -57,6 +58,7 @@ class TaskQueryServiceImplTest {
         assertThat(responseDto.durationMs()).isEqualTo(5000L);
         assertThat(responseDto.status()).isEqualTo(TaskStatus.COMPLETED);
         assertThat(responseDto.progress()).isEqualTo(100);
+        assertThat(responseDto.statusMessage()).isEqualTo("Task completed successfully");
         assertThat(responseDto.result()).isEqualTo("Task completed successfully");
         assertThat(responseDto.errorMessage()).isNull();
         assertThat(responseDto.attemptCount()).isEqualTo(1);

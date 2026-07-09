@@ -43,6 +43,7 @@ class TaskControllerTest {
                 TaskStatus.COMPLETED,
                 100,
                 "Task completed successfully",
+                "Task completed successfully",
                 null,
                 1,
                 now,
@@ -60,6 +61,7 @@ class TaskControllerTest {
                 .andExpect(jsonPath("$.durationMs", is(5000)))
                 .andExpect(jsonPath("$.status", is("COMPLETED")))
                 .andExpect(jsonPath("$.progress", is(100)))
+                .andExpect(jsonPath("$.statusMessage", is("Task completed successfully")))
                 .andExpect(jsonPath("$.result", is("Task completed successfully")))
                 .andExpect(jsonPath("$.errorMessage").doesNotExist())
                 .andExpect(jsonPath("$.attemptCount", is(1)));

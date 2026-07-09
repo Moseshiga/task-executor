@@ -56,7 +56,14 @@ public class TaskEntity {
     private Integer progress;
 
     /**
-     * Intermediate or final execution result.
+     * Readable current task state. Failed tasks keep the last progress value
+     * so a future retry can describe where execution stopped.
+     */
+    @Column(name = "status_message", length = 1000)
+    private String statusMessage;
+
+    /**
+     * Final successful execution result.
      */
     @Column(name = "result", length = 1000)
     private String result;

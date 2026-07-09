@@ -30,7 +30,7 @@ public class TaskController {
     @GetMapping("/{id}")
     @Operation(
             summary = "Get task by id",
-            description = "Returns current task status, progress, intermediate result, final result or error details."
+            description = "Returns current task status, last saved progress, status message, final result or error details."
     )
     @ApiResponses({
             @ApiResponse(

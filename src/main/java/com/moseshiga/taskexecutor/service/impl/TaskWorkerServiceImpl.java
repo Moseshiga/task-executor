@@ -35,7 +35,8 @@ public class TaskWorkerServiceImpl implements TaskWorkerService {
         task.setStartedAt(now);
         task.setUpdatedAt(now);
         task.setAttemptCount(nextAttemptCount);
-        task.setResult("Task execution started");
+        task.setStatusMessage("Task execution started");
+        task.setResult(null);
         task.setErrorMessage(null);
 
         TaskEntity savedTask = taskRepository.save(task);

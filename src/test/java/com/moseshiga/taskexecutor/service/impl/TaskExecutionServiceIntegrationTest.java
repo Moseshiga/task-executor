@@ -82,7 +82,7 @@ class TaskExecutionServiceIntegrationTest extends PostgresIntegrationTest {
                 .durationMs(durationMs)
                 .status(status)
                 .progress(0)
-                .result("Task execution started")
+                .statusMessage("Task execution started")
                 .errorMessage(null)
                 .attemptCount(1)
                 .createdAt(now)

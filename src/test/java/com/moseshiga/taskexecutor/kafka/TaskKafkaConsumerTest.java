@@ -6,7 +6,6 @@ import jakarta.validation.Validation;
 import jakarta.validation.Validator;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.support.Acknowledgment;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -19,23 +18,19 @@ class TaskKafkaConsumerTest {
 
     private TaskRegistrationService taskRegistrationService;
     private Acknowledgment acknowledgment;
-    private KafkaTemplate<String, TaskRequestDto> kafkaTemplate;
     private TaskKafkaConsumer taskKafkaConsumer;
 
     @BeforeEach
     void setUp() {
         taskRegistrationService = mock(TaskRegistrationService.class);
         acknowledgment = mock(Acknowledgment.class);
-        kafkaTemplate = mock(KafkaTemplate.class);
 
         Validator validator = Validation.buildDefaultValidatorFactory()
                 .getValidator();
 
         taskKafkaConsumer = new TaskKafkaConsumer(
                 taskRegistrationService,
-                validator,
-                kafkaTemplate,
-                "tasks.DLT"
+                validator
         );
     }
 
@@ -50,36 +45,39 @@ class TaskKafkaConsumerTest {
     }
 
     @Test
-    void consumeShouldAcknowledgeAndSendToDltWhenNameIsBlank() {
+    void consumeShouldRethrowAndNotAcknowledgeWhenNameIsBlank() {
         TaskRequestDto requestDto = new TaskRequestDto(" ", 5000L);
 
-        taskKafkaConsumer.consume(requestDto, acknowledgment);
+        assertThatThrownBy(() -> taskKafkaConsumer.consume(requestDto, acknowledgment))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Invalid task message");
 
         verify(taskRegistrationService, never()).register(requestDto);
-        verify(kafkaTemplate).send("tasks.DLT", requestDto);
-        verify(acknowledgment).acknowledge();
+        verify(acknowledgment, never()).acknowledge();
     }
 
     @Test
-    void consumeShouldAcknowledgeAndSendToDltWhenDurationIsNull() {
+    void consumeShouldRethrowAndNotAcknowledgeWhenDurationIsNull() {
         TaskRequestDto requestDto = new TaskRequestDto("Invalid task", null);
 
-        taskKafkaConsumer.consume(requestDto, acknowledgment);
+        assertThatThrownBy(() -> taskKafkaConsumer.consume(requestDto, acknowledgment))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Invalid task message");
 
         verify(taskRegistrationService, never()).register(requestDto);
-        verify(kafkaTemplate).send("tasks.DLT", requestDto);
-        verify(acknowledgment).acknowledge();
+        verify(acknowledgment, never()).acknowledge();
     }
 
     @Test
-    void consumeShouldAcknowledgeAndSendToDltWhenDurationIsNegative() {
+    void consumeShouldRethrowAndNotAcknowledgeWhenDurationIsNegative() {
         TaskRequestDto requestDto = new TaskRequestDto("Invalid task", -100L);
 
-        taskKafkaConsumer.consume(requestDto, acknowledgment);
+        assertThatThrownBy(() -> taskKafkaConsumer.consume(requestDto, acknowledgment))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Invalid task message");
 
         verify(taskRegistrationService, never()).register(requestDto);
-        verify(kafkaTemplate).send("tasks.DLT", requestDto);
-        verify(acknowledgment).acknowledge();
+        verify(acknowledgment, never()).acknowledge();
     }
 
     @Test

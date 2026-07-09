@@ -54,7 +54,8 @@ class TaskWorkerServiceIntegrationTest extends PostgresIntegrationTest {
         assertThat(pickedTask.getAttemptCount()).isEqualTo(1);
         assertThat(pickedTask.getStartedAt()).isNotNull();
         assertThat(pickedTask.getUpdatedAt()).isNotNull();
-        assertThat(pickedTask.getResult()).isEqualTo("Task execution started");
+        assertThat(pickedTask.getStatusMessage()).isEqualTo("Task execution started");
+        assertThat(pickedTask.getResult()).isNull();
         assertThat(pickedTask.getErrorMessage()).isNull();
 
         assertThat(untouchedTask.getStatus()).isEqualTo(TaskStatus.NEW);

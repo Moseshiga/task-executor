@@ -62,7 +62,8 @@ class TaskLifecycleIntegrationTest extends PostgresIntegrationTest {
         assertThat(inProgressTask.getStatus()).isEqualTo(TaskStatus.IN_PROGRESS);
         assertThat(inProgressTask.getAttemptCount()).isEqualTo(1);
         assertThat(inProgressTask.getStartedAt()).isNotNull();
-        assertThat(inProgressTask.getResult()).isEqualTo("Task execution started");
+        assertThat(inProgressTask.getStatusMessage()).isEqualTo("Task execution started");
+        assertThat(inProgressTask.getResult()).isNull();
 
         taskExecutionService.execute(pickedTask.orElseThrow());
 

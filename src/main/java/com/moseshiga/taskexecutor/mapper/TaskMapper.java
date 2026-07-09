@@ -18,8 +18,7 @@ public class TaskMapper {
                 .durationMs(dto.durationMs())
                 .status(TaskStatus.NEW)
                 .progress(0)
-                .result(null)
-                .errorMessage(null)
+                .statusMessage("Task registered")
                 .attemptCount(0)
                 .createdAt(now)
                 .updatedAt(now)
@@ -33,6 +32,7 @@ public class TaskMapper {
                 entity.getDurationMs(),
                 entity.getStatus(),
                 entity.getProgress(),
+                entity.getStatusMessage(),
                 entity.getResult(),
                 entity.getErrorMessage(),
                 entity.getAttemptCount(),

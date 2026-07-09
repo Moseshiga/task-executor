@@ -19,12 +19,12 @@ public class TaskUpdateServiceImpl implements TaskUpdateService {
 
     @Override
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public boolean updateProgress(Long taskId, int attemptCount, int progress, String result) {
+    public boolean updateProgress(Long taskId, int attemptCount, int progress, String statusMessage) {
         int updatedRows = taskRepository.updateProgressIfCurrent(
                 taskId,
                 attemptCount,
                 progress,
-                result,
+                statusMessage,
                 Instant.now()
         );
 
@@ -71,12 +71,12 @@ public class TaskUpdateServiceImpl implements TaskUpdateService {
 
     @Override
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public boolean returnToNew(Long taskId, int attemptCount, String result) {
+    public boolean returnToNew(Long taskId, int attemptCount, String statusMessage) {
 
         int updatedRows = taskRepository.returnToNewIfCurrent(
                 taskId,
                 attemptCount,
-                result,
+                statusMessage,
                 Instant.now()
         );
 
