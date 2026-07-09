@@ -6,13 +6,9 @@ import com.moseshiga.taskexecutor.entity.TaskEntity;
 import com.moseshiga.taskexecutor.enums.TaskStatus;
 import org.springframework.stereotype.Component;
 
-import java.time.Instant;
-
 @Component
 public class TaskMapper {
     public TaskEntity toEntity(TaskRequestDto dto) {
-        Instant now = Instant.now();
-
         return TaskEntity.builder()
                 .name(dto.name())
                 .durationMs(dto.durationMs())
@@ -20,8 +16,6 @@ public class TaskMapper {
                 .progress(0)
                 .statusMessage("Task registered")
                 .attemptCount(0)
-                .createdAt(now)
-                .updatedAt(now)
                 .build();
     }
 

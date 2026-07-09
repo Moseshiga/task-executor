@@ -85,7 +85,6 @@ class TaskRepositoryIntegrationTest extends PostgresIntegrationTest {
                 .isEqualTo("Task returned to NEW after stale IN_PROGRESS timeout");
         assertThat(recoveredTask.getResult()).isNull();
         assertThat(recoveredTask.getErrorMessage()).isNull();
-        assertThat(recoveredTask.getVersion()).isEqualTo(staleTask.getVersion() + 1);
     }
 
     @Test
@@ -119,7 +118,6 @@ class TaskRepositoryIntegrationTest extends PostgresIntegrationTest {
         assertThat(recoveredTask.getResult()).isNull();
         assertThat(recoveredTask.getErrorMessage())
                 .isEqualTo("Task failed after reaching max attempts");
-        assertThat(recoveredTask.getVersion()).isEqualTo(staleTask.getVersion() + 1);
     }
 
     @Test

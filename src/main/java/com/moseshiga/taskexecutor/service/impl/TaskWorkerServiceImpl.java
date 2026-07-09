@@ -33,7 +33,6 @@ public class TaskWorkerServiceImpl implements TaskWorkerService {
 
         task.setStatus(TaskStatus.IN_PROGRESS);
         task.setStartedAt(now);
-        task.setUpdatedAt(now);
         task.setAttemptCount(nextAttemptCount);
         task.setStatusMessage("Task execution started");
         task.setResult(null);

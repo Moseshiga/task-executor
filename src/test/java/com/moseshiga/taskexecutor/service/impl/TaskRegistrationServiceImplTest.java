@@ -37,7 +37,6 @@ class TaskRegistrationServiceImplTest {
                 .thenAnswer(invocation -> {
                     TaskEntity task = invocation.getArgument(0);
                     task.setId(1L);
-                    task.setVersion(0L);
                     return task;
                 });
 

@@ -42,7 +42,6 @@ class TaskQueryServiceImplTest {
                 .result("Task completed successfully")
                 .errorMessage(null)
                 .attemptCount(1)
-                .version(0L)
                 .createdAt(now)
                 .startedAt(now)
                 .completedAt(now)

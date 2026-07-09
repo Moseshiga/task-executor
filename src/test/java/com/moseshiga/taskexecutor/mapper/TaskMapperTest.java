@@ -29,8 +29,8 @@ class TaskMapperTest {
         assertThat(entity.getResult()).isNull();
         assertThat(entity.getErrorMessage()).isNull();
         assertThat(entity.getAttemptCount()).isZero();
-        assertThat(entity.getCreatedAt()).isNotNull();
-        assertThat(entity.getUpdatedAt()).isNotNull();
+        assertThat(entity.getCreatedAt()).isNull();
+        assertThat(entity.getUpdatedAt()).isNull();
     }
 
     @Test
@@ -47,7 +47,6 @@ class TaskMapperTest {
                 .result("Task completed successfully")
                 .errorMessage(null)
                 .attemptCount(1)
-                .version(0L)
                 .createdAt(now)
                 .startedAt(now)
                 .completedAt(now)

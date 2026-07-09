@@ -3,18 +3,21 @@ package com.moseshiga.taskexecutor.entity;
 import com.moseshiga.taskexecutor.enums.TaskStatus;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EntityListeners;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
-import jakarta.persistence.Version;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import java.time.Instant;
 
@@ -24,6 +27,7 @@ import java.time.Instant;
 @NoArgsConstructor
 @AllArgsConstructor
 @Entity
+@EntityListeners(AuditingEntityListener.class)
 @Table(name = "tasks")
 public class TaskEntity {
     @Id
@@ -80,15 +84,8 @@ public class TaskEntity {
     @Column(name = "attempt_count", nullable = false)
     private Integer attemptCount;
 
-    /**
-     * Additional optimistic version field.
-     * Main worker distribution will still use FOR UPDATE SKIP LOCKED.
-     */
-    @Version
-    @Column(name = "version", nullable = false)
-    private Long version;
-
-    @Column(name = "created_at", nullable = false)
+    @CreatedDate
+    @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
     @Column(name = "started_at")
@@ -97,6 +94,7 @@ public class TaskEntity {
     @Column(name = "completed_at")
     private Instant completedAt;
 
+    @LastModifiedDate
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 }

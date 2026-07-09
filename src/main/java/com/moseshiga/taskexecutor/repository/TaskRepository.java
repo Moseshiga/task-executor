@@ -12,6 +12,11 @@ import java.util.Optional;
 
 @Repository
 public interface TaskRepository extends JpaRepository<TaskEntity, Long> {
+    /*
+     * Native updates set updated_at explicitly because it is also used as the
+     * worker heartbeat for stale task recovery. JPA auditing does not run for
+     * native SQL update queries.
+     */
 
     @Query(
             value = """
@@ -32,8 +37,7 @@ public interface TaskRepository extends JpaRepository<TaskEntity, Long> {
                     UPDATE tasks
                     SET progress = :progress,
                         status_message = :statusMessage,
-                        updated_at = :updatedAt,
-                        version = version + 1
+                        updated_at = :updatedAt
                     WHERE id = :taskId
                       AND attempt_count = :attemptCount
                       AND status = 'IN_PROGRESS'
@@ -58,8 +62,7 @@ public interface TaskRepository extends JpaRepository<TaskEntity, Long> {
                         result = :result,
                         error_message = NULL,
                         completed_at = :completedAt,
-                        updated_at = :completedAt,
-                        version = version + 1
+                        updated_at = :completedAt
                     WHERE id = :taskId
                       AND attempt_count = :attemptCount
                       AND status = 'IN_PROGRESS'
@@ -81,8 +84,7 @@ public interface TaskRepository extends JpaRepository<TaskEntity, Long> {
                         status_message = :errorMessage,
                         error_message = :errorMessage,
                         completed_at = :completedAt,
-                        updated_at = :completedAt,
-                        version = version + 1
+                        updated_at = :completedAt
                     WHERE id = :taskId
                       AND attempt_count = :attemptCount
                       AND status = 'IN_PROGRESS'
@@ -107,8 +109,7 @@ public interface TaskRepository extends JpaRepository<TaskEntity, Long> {
                         error_message = NULL,
                         started_at = NULL,
                         completed_at = NULL,
-                        updated_at = :updatedAt,
-                        version = version + 1
+                        updated_at = :updatedAt
                     WHERE id = :taskId
                       AND attempt_count = :attemptCount
                       AND status = 'IN_PROGRESS'
@@ -163,8 +164,7 @@ public interface TaskRepository extends JpaRepository<TaskEntity, Long> {
                         WHEN t.attempt_count >= :maxAttempts THEN CURRENT_TIMESTAMP
                         ELSE NULL
                     END,
-                    updated_at = CURRENT_TIMESTAMP,
-                    version = t.version + 1
+                    updated_at = CURRENT_TIMESTAMP
                 FROM locked_tasks lt
                 WHERE t.id = lt.id
                 """,
