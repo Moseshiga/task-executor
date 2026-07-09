@@ -8,8 +8,10 @@ import com.moseshiga.taskexecutor.support.PostgresIntegrationTest;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.TestPropertySource;
 
+import java.sql.Timestamp;
 import java.time.Instant;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -25,6 +27,9 @@ class StaleTaskRecoveryServiceIntegrationTest extends PostgresIntegrationTest {
 
     @Autowired
     private StaleTaskRecoveryService staleTaskRecoveryService;
+
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
 
     @BeforeEach
     void setUp() {
@@ -124,6 +129,16 @@ class StaleTaskRecoveryServiceIntegrationTest extends PostgresIntegrationTest {
                 .updatedAt(startedAt == null ? now : startedAt)
                 .build();
 
-        return taskRepository.saveAndFlush(task);
+        TaskEntity savedTask = taskRepository.saveAndFlush(task);
+
+        if (startedAt != null) {
+            jdbcTemplate.update(
+                    "UPDATE tasks SET updated_at = ? WHERE id = ?",
+                    Timestamp.from(startedAt),
+                    savedTask.getId()
+            );
+        }
+
+        return savedTask;
     }
 }
