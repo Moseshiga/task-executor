@@ -2,6 +2,7 @@ package com.moseshiga.taskexecutor.exception;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolationException;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.FieldError;
@@ -15,6 +16,7 @@ import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
 
+@Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler {
     @ExceptionHandler(TaskNotFoundException.class)
@@ -91,6 +93,8 @@ public class GlobalExceptionHandler {
             Exception exception,
             HttpServletRequest request
     ) {
+        log.error("Unexpected server error: path={}", request.getRequestURI(), exception);
+
         return buildErrorResponse(
                 HttpStatus.INTERNAL_SERVER_ERROR,
                 "Unexpected server error",
@@ -104,11 +108,20 @@ public class GlobalExceptionHandler {
             HandlerMethodValidationException exception,
             HttpServletRequest request
     ) {
+        Map<String, String> validationErrors = new HashMap<>();
+
+        exception.getAllErrors().forEach(error -> {
+            String key = error.getCodes() != null && error.getCodes().length > 0
+                    ? error.getCodes()[0]
+                    : "validation";
+            validationErrors.put(key, error.getDefaultMessage());
+        });
+
         return buildErrorResponse(
                 HttpStatus.BAD_REQUEST,
                 "Validation failed",
                 request.getRequestURI(),
-                null
+                validationErrors
         );
     }
 

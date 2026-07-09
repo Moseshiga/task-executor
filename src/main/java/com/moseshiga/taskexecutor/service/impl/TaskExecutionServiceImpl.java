@@ -11,6 +11,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import java.util.Objects;
+
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -63,7 +65,7 @@ public class TaskExecutionServiceImpl implements TaskExecutionService {
             taskUpdateService.fail(
                     taskId,
                     attemptCount,
-                    "Task execution failed: " + e.getMessage()
+                    "Task execution failed: " + Objects.toString(e.getMessage(), e.getClass().getSimpleName())
             );
         }
     }

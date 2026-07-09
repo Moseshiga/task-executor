@@ -6,6 +6,7 @@ import org.springframework.context.annotation.Configuration;
 
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicInteger;
 
 @Configuration
 public class WorkerConfig {
@@ -13,6 +14,10 @@ public class WorkerConfig {
     public ExecutorService workerExecutorService(
             @Value("${worker.pool-size}") int poolSize
     ) {
-        return Executors.newFixedThreadPool(poolSize);
+        AtomicInteger counter = new AtomicInteger(1);
+
+        return Executors.newFixedThreadPool(poolSize, runnable ->
+                new Thread(runnable, "task-worker-" + counter.getAndIncrement())
+        );
     }
 }

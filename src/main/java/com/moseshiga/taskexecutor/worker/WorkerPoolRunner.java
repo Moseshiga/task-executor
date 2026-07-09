@@ -58,10 +58,12 @@ public class WorkerPoolRunner implements ApplicationRunner {
         try {
             if (!workerExecutorService.awaitTermination(30, TimeUnit.SECONDS)) {
                 log.warn("Task worker pool did not stop within timeout");
+                workerExecutorService.shutdownNow();
             }
         } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
             log.warn("Interrupted while stopping task worker pool");
+            workerExecutorService.shutdownNow();
+            Thread.currentThread().interrupt();
         }
     }
 }
